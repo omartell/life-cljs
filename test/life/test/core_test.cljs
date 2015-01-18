@@ -4,21 +4,33 @@
   (:require [cemerick.cljs.test :as t])
   (:use [clojure.set :only [union intersection difference subset?]]))
 
-(defn find-neighbors [[ax ay :as cell] world]
-  (filter (fn [[bx by :as neighbor]]
-            (and  (not (= cell neighbor))
-                  (#{0 1 -1} (- ax bx))
-                  (#{0 1 -1} (- ay by))))
-          world))
-
-(defn survivors [world]
-  (filter (fn [cell]
-            (let [neighbors (find-neighbors cell world)]
-              (#{2 3} (count neighbors))))
-          world))
+(defn neighbors-locations [[x y]]
+  (into #{} (for [sumx #{-1 1 0} sumy #{-1 1 0}
+                  :when (not (and (= sumx 0) (= sumy 0)))]
+              [(+ x sumx) (+ y sumy)])))
 
 (defn tick [world]
-  (into #{} (survivors world)))
+  (let [all-neighbors (reduce
+                       (fn [map cell]
+                         (let [cell-neighbors (neighbors-locations cell)]
+                           (assoc map cell {:living (intersection cell-neighbors world)
+                                            :dead (difference cell-neighbors world)})))
+                       {}
+                       world)
+
+        living-cells (keys (filter (fn [[cell cell-neighbors]]
+                                     (#{2 3} (count (:living cell-neighbors))))
+                                   all-neighbors))
+
+        all-dead-cells (mapcat (fn [[cell cell-neighbors]]
+                                 (into [] (:dead cell-neighbors)))
+                               all-neighbors)
+
+        new-born-cells (keys (filter (fn [[cell instances]]
+                                       (#{3} (count instances)))
+                                     (group-by identity all-dead-cells)))]
+
+    (union (into #{} living-cells) (into #{} new-born-cells))))
 
 ;; Cell Coordinates
 ;; [0,0 1,0 2,0 3,0
